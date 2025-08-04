@@ -10,331 +10,317 @@
 #include "clsc.h"       // line count source code
 
 // Cria o processo. Retorna  o PID do processo em caso de sucesso ou -1 se não foi possível criar o processo.
-pid_t criarProcesso() {
+pid_t createProcess() {
     pid_t pid = fork();
 
     if (pid < 0) {
-        printf(ERRO_CRIA_PROCESSO);
+        printf(ERROR_CREATE_PROCESS);
         exit(EXIT_FAILURE);
     }
     
     return pid;
-} // criarProcesso()
+} // createProcess()
 
 /* Procura a última ocorrência do (.) no nome do arquivo. Retorna NULL se não for encontrado nenhum (.), ou seja, não possui extensão.
    Compara o último ponto com a extensão (.c). Se orquivo tem a extensão (.c) retorna 1, caso contrário, retorna 0.*/
-int verificaExtensao(const char *nomeArq) {
-    const char *ponto = strrchr(nomeArq, PONTO); // Encontra a última ocorrência do (.).
+int checkExtension(const char *filename) {
+    const char *dot = strrchr(filename, DOT); // Encontra a última ocorrência do (.).
 
-    if (ponto == NULL)  // Não há extensão no nome do arquivo.
+    if (dot == NULL)  // Não há extensão no nome do arquivo.
         return 0; 
-    if (strcmp(ponto, EXTENSAO) == 0) 
+    if (strcmp(dot, C_EXTENSION) == 0) 
         return 1; // Encontrou a extensão.
     
     return 0; // Extensão inválida.
-} // verificaExtensao()
+} // checkExtension()
 
 // Verifica se o argumento passado pelo usuário é um diretório, retorna 1 se for um diretório e 0 caso contrário.
-int verificaDiretorio(const char *nomeDir){
-    DIR *dir = opendir(nomeDir);
+int isDirectory(const char *dirName){
+    DIR *dir = opendir(dirName);
     if (dir != NULL) {
         closedir(dir);
         return 1; 
     }
     return 0;
-} // verificaDiretorio()
+} // isDirectory()
 
 // Função que calcula a duração do programa em segundos.
-double calculaDuracao(time_t inicio, time_t fim){
-    return difftime(inicio,fim);
+double calculateDuration(time_t start, time_t end){
+    return difftime(start, end);
 }
 
 // Função para imprimir a quantidade de arquivos e o resultado da soma das linhas.
-void saidaContagem(Resultado d){
-    printf("%s- Código-fonte C%s\n",ABRE_NEGRITO, FECHA_NEGRITO);
-    printf("\tNº de Arquivos = %d\n",d.qntdArquivos);
-    printf("\tLinhas vazias = %d\n",d.totalVazias);
-    printf("\tLinhas de comentários = %d\n",d.totalComentarios);
-    printf("\tLinhas de instruções = %d\n\n",d.totalInstrucoes);
-} // saidaContagem()
+void printLineCount(Result result){
+    printf("%s- Código-fonte C%s\n", BOLD_ON, BOLD_OFF);
+    printf("\tNº de Arquivos = %d\n", result.fileCount);
+    printf("\tLinhas vazias = %d\n", result.totalEmpty);
+    printf("\tLinhas de comentários = %d\n", result.totalComments);
+    printf("\tLinhas de instruções = %d\n\n", result.totalInstructions);
+} // printLineCount()
 
 // Função para imprimir o tempo necessário para execução do programa.
-void saidaTempo(TempoExecucao t){
-    printf("%s- Tempo%s\n",ABRE_NEGRITO, FECHA_NEGRITO);
-    printf("\tInício.: %s\n",t.inicio);
-    printf("\tTérmino: %s\n",t.termino);
-    printf("\tDuração: %d segundos\n",t.duracao);
-} // saidaTempo()
+void printExecutionTime(ExecutionTime t){
+    printf("%s- Tempo%s\n", BOLD_ON, BOLD_OFF);
+    printf("\tInício.: %s\n", t.start);
+    printf("\tTérmino: %s\n", t.end);
+    printf("\tDuração: %d segundos\n", t.duration);
+} // printExecutionTime()
 
 // Função para remover os espaços no começo e no final de cada linha.
-void removerEspacos(char *linha) {
-    int inicio = 0, fim = strlen(linha) - 1;
+void trimLine(char *line) {
+    int start = 0, end = strlen(line) - 1;
 
     // Removendo os espaços ou tabulações do início da linha.
-    while (linha[inicio] == ESPACO || linha[inicio] == TABULACAO_HORIZONTAL)
-        inicio++;
+    while (line[start] == SPACE || line[start] == HORIZONTAL_TAB)
+        start++;
 
     // Remove os espaços ou tabulações do final da linha.
-    while (fim >= inicio && (linha[fim] == ESPACO || linha[fim] == TABULACAO_HORIZONTAL || linha[fim] == FIM_DE_LINHA))
-        fim--;
+    while (end >= start && (line[end] == SPACE || line[end] == HORIZONTAL_TAB || line[end] == NEWLINE))
+        end--;
 
     // Ajusta a string para encerrar no ponto certo.
     int i, j = 0;
-    for (i = inicio; i <= fim; i++) {
-        linha[j++] = linha[i];
+    for (i = start; i <= end; i++) {
+        line[j++] = line[i];
     }
-    linha[j] = CARACTERE_NULO;  // Insere o terminador da string.
-} // removerEspacos()
+    line[j] = NULL_CHAR;  // Insere o terminador da string.
+} // trimLine()
 
 // Função para contar o número de linhas vazias, comentários e instruções de um código-fonte.
-int contaLinhas(void *arg){
-    Contador *contador = (Contador*)arg;
-    FILE *arq = fopen(contador->nomeArq, "r");
-    
-    char linha[sizeof(arq) * TAMANHO_BUFFER_LINHA];
-    char *posicaoFechaBloco = strstr(linha, FECHA_BLOCO_COMENTARIO);
-    char *posicaoComentarioLinha = strstr(linha, COMENTARIO_DE_LINHA);
-    int blocoComentario=0; // Flag que identifica se iniciou um bloco de comentário.
+int countLines(void *arg){
+    LineCounter *counter = (LineCounter*)arg;
+    FILE *file = fopen(counter->filename, "r");
 
-    contador->instrucoes = 0;
-    contador->comentarios = 0;
-    contador->linhasVazias = 0;
+    char line[sizeof(file) * LINE_BUFFER_SIZE];
+    char *endBlock = strstr(line, CLOSE_BLOCK_COMMENT);
+    char *lineComment = strstr(line, LINE_COMMENT);
+    int inBlock = 0; // Flag que identifica se iniciou um bloco de comentário.
 
-    if (arq == NULL) {
-        printf(ERRO_ABRE_ARQUIVO);
+    counter->instructions = 0;
+    counter->comments = 0;
+    counter->emptyLines = 0;
+
+    if (file == NULL) {
+        printf(ERROR_OPEN_FILE);
         exit(EXIT_FAILURE);
     }
 
-    while(fgets(linha,sizeof(linha),arq)){
-        size_t len = strlen(linha);
-        if (linha[len - 1] == FIM_DE_LINHA) { // Substitui o '\n' por '\0'.
-            linha[len - 1] = CARACTERE_NULO;  
+    while (fgets(line, sizeof(line), file)) {
+        size_t len = strlen(line);
+        if (line[len - 1] == NEWLINE) {
+            line[len - 1] = NULL_CHAR;
         }
-        removerEspacos(linha);
-        
+        trimLine(line);
+
         // Verificações em blocos de comentários.
-        if(blocoComentario==1 && strstr(linha, FECHA_BLOCO_COMENTARIO) != NULL){
-            if(posicaoFechaBloco != NULL && *(posicaoFechaBloco+2) != CARACTERE_NULO){
-                contador->instrucoes++;
+        if (inBlock == 1 && strstr(line, CLOSE_BLOCK_COMMENT) != NULL) {
+            if (endBlock != NULL && *(endBlock + 2) != NULL_CHAR) {
+                counter->instructions++;
             }
-            else if (posicaoFechaBloco != NULL && posicaoComentarioLinha != NULL && *(posicaoFechaBloco + 2) == BARRA && *(posicaoFechaBloco + 3) == BARRA) {
-                contador->comentarios++; 
+            else if (endBlock != NULL && lineComment != NULL && *(endBlock + 2) == SLASH && *(endBlock + 3) == SLASH) {
+                counter->comments++; 
             }
-            else{
-                contador->comentarios++;
+            else {
+                counter->comments++;
             }
-            blocoComentario=0;
+            inBlock = 0;
         }
-        else if(blocoComentario==1 && linha[0] != ASTERISCO){
-            contador->comentarios++;
+        else if (inBlock == 1 && line[0] != ASTERISK) {
+            counter->comments++;
         }
-        else if(strstr(linha, ABRE_BLOCO_COMENTARIO) != NULL && strstr(linha, FECHA_BLOCO_COMENTARIO) != NULL && strstr(linha, COMENTARIO_DE_LINHA) != NULL){
-            contador->instrucoes++;
+        else if (strstr(line, OPEN_BLOCK_COMMENT) != NULL && strstr(line, CLOSE_BLOCK_COMMENT) != NULL && strstr(line, LINE_COMMENT) != NULL) {
+            counter->instructions++;
         }
-        else if(linha[0] == BARRA && linha[1] == ASTERISCO) { // Verifica se é o início de um comentário em bloco.
-            contador->comentarios++;
-            if (strstr(linha, FECHA_BLOCO_COMENTARIO) == NULL) { // Verifica se "*/" não está presente na linha.
-                blocoComentario = 1;
+        else if (line[0] == SLASH && line[1] == ASTERISK) {
+            counter->comments++;
+            if (strstr(line, CLOSE_BLOCK_COMMENT) == NULL) {
+                inBlock = 1;
             }
         }
-        else if (blocoComentario == 1 && strlen(linha) == 0) {
-            contador->comentarios++; // Verifica se é uma linha vazia dentro de um comentário.
+        else if (inBlock == 1 && strlen(line) == 0) {
+            counter->comments++;
         }
-        else if (strlen(linha) == 0) { // Verifica se a linha está vazia.
-            contador->linhasVazias++; 
+        else if (strlen(line) == 0) {
+            counter->emptyLines++;
         }
-        else if(linha[0] == BARRA && linha[1] == BARRA){ // Verifica se é comentário de linha.
-            contador->comentarios++;
+        else if (line[0] == SLASH && line[1] == SLASH) {
+            counter->comments++;
         }
-        else{
-            contador->instrucoes++;
+        else {
+            counter->instructions++;
         }
     }
-    
-    fclose(arq);
 
+    fclose(file);
     thrd_exit(EXIT_SUCCESS);
-} // contaLinhas()
+} // countLines()
 
 /* Função chamada caso o argumento passado seja um diretório. Percorre o diretório e subdiretórios existentes armazenando os nomes dos 
    arquivos que contenham a extensão (.c).*/
-int processaDiretorio(const char *nomeDir, Contador *contagemArquivos, Resultado *dados) { 
-    DIR *dir = opendir(nomeDir);
+int processDirectory(const char *dirName, LineCounter *counters, Result *summary) {
+    DIR *dir = opendir(dirName);
 
     if (dir == NULL) {
-        printf(ERRO_ABRE_DIRETORIO);
+        printf(ERROR_OPEN_DIR);
         exit(EXIT_FAILURE);
     }
 
-    struct dirent *entrada;
-    while((entrada = readdir(dir))!= NULL){
-        if(entrada->d_type == DT_DIR && strcmp(entrada->d_name, DIRETORIO_PONTO) && strcmp(entrada->d_name, DIRETORIO_PONTO_PONTO)){
-            char caminhoCompleto[TAMANHO_MAX_CAMINHO] = {CARACTERE_NULO};
-            strcat(caminhoCompleto,nomeDir);
-            strcat(caminhoCompleto,"/");
-            strcat(caminhoCompleto, entrada->d_name);
-            processaDiretorio(caminhoCompleto, contagemArquivos, dados); 
-        } 
-        else if(verificaExtensao(entrada->d_name) == 1){
-            char caminhoCompleto[TAMANHO_MAX_CAMINHO] = {CARACTERE_NULO};
-            strcat(caminhoCompleto,nomeDir);
-            strcat(caminhoCompleto,"/");
-            strcat(caminhoCompleto, entrada->d_name);
-            
-            // Armazenando os nomes dos arquivos.
-            strcpy(contagemArquivos[dados->qntdArquivos].nomeArq, caminhoCompleto); 
-            dados->qntdArquivos++;
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_type == DT_DIR && strcmp(entry->d_name, DIR_CURRENT) && strcmp(entry->d_name, DIR_PARENT)) {
+            char fullPath[MAX_PATH_LENGTH] = {NULL_CHAR};
+            strcat(fullPath, dirName);
+            strcat(fullPath, "/");
+            strcat(fullPath, entry->d_name);
+            processDirectory(fullPath, counters, summary); 
+        }
+        else if (checkExtension(entry->d_name) == 1) {
+            char fullPath[MAX_PATH_LENGTH] = {NULL_CHAR};
+            strcat(fullPath, dirName);
+            strcat(fullPath, "/");
+            strcat(fullPath, entry->d_name);
+
+            strcpy(counters[summary->fileCount].filename, fullPath);
+            summary->fileCount++;
         }
     }
 
     closedir(dir);
 
     return EXIT_SUCCESS;
-} // processaDiretorio()
+} // processDirectory()
 
 /* Função chamada caso o argumento passado seja um diretório. Percorre o diretório e subdiretórios existentes verificando a existência de arquivos (.c). 
    Retorna a quantidade de arquivos encontrados.*/
-int contaArquivos(const char *nomeDir){
-    DIR *dir = opendir(nomeDir);
-    int quantidade=0;
+int countFiles(const char *dirName){
+    DIR *dir = opendir(dirName);
+    int quantity = 0;
 
     if (dir == NULL) {
-        printf(ERRO_ABRE_DIRETORIO);
+        printf(ERROR_OPEN_DIR);
         exit(EXIT_FAILURE);
-    }  
+    }
 
-    struct dirent *entrada;
-    while((entrada = readdir(dir))!= NULL){
-        if(entrada->d_type == DT_DIR && strcmp(entrada->d_name, DIRETORIO_PONTO) && strcmp(entrada->d_name, DIRETORIO_PONTO_PONTO)){
-            char caminhoCompleto[TAMANHO_MAX_CAMINHO] = {CARACTERE_NULO};
-            strcat(caminhoCompleto,nomeDir);
-            strcat(caminhoCompleto,"/");
-            strcat(caminhoCompleto, entrada->d_name);
-            quantidade += contaArquivos(caminhoCompleto); 
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_type == DT_DIR && strcmp(entry->d_name, DIR_CURRENT) && strcmp(entry->d_name, DIR_PARENT)) {
+            char fullPath[MAX_PATH_LENGTH] = {NULL_CHAR};
+            strcat(fullPath, dirName);
+            strcat(fullPath, "/");
+            strcat(fullPath, entry->d_name);
+            quantity += countFiles(fullPath);
         }
-        else if(verificaExtensao(entrada->d_name) == 1){
-            // Armazenando a quantidade de arquivos que contenham a extensão desejada.
-            quantidade++;
+        else if (checkExtension(entry->d_name) == 1) {
+            quantity++;
         }
     }
 
     closedir(dir);
-    return quantidade;
+    return quantity;
 }
 
-/* Função chamada quando o argumento for um diretório, cria as threads para cada arquivo, chamando contaLinhas. Faz a soma das linhas vazias, 
+/* Função chamada quando o argumento for um diretório, cria as threads para cada arquivo, chamando countLines. Faz a soma das linhas vazias, 
    comentário e linhas de instruções. Por fim chama a função para exibir o resultado do cálculo das linhas.*/
-int processaArquivos(Contador *contagemArquivos, Resultado dados){
-    thrd_t tid[dados.qntdArquivos]; // thread identificafion.
+int processFiles(LineCounter *counters, Result summary){
+    thrd_t tid[summary.fileCount];
 
-    for(int i=0; i < dados.qntdArquivos; i++){
-        thrd_create(&tid[i], contaLinhas, &contagemArquivos[i]);
+    for (int i = 0; i < summary.fileCount; i++) {
+        thrd_create(&tid[i], countLines, &counters[i]);
     }
-    for(int i=0; i < dados.qntdArquivos; i++){
+    for (int i = 0; i < summary.fileCount; i++) {
         thrd_join(tid[i], NULL);
     }
 
-    for(int i=0; i<dados.qntdArquivos; i++){
-        dados.totalComentarios += contagemArquivos[i].comentarios;
-    }
-    for(int i=0; i<dados.qntdArquivos; i++){
-        dados.totalInstrucoes += contagemArquivos[i].instrucoes;
-    }
-    for(int i=0; i<dados.qntdArquivos; i++){
-        dados.totalVazias += contagemArquivos[i].linhasVazias;
+    for (int i = 0; i < summary.fileCount; i++) {
+        summary.totalComments += counters[i].comments;
+        summary.totalInstructions += counters[i].instructions;
+        summary.totalEmpty += counters[i].emptyLines;
     }
 
-    saidaContagem(dados);
-
+    printLineCount(summary);
     return EXIT_SUCCESS;
 }
 
 /* Função chamada caso o argumento passado seja apenas um arquivo. Cria uma thread para realizar o cálculo de linhas vazias, comentários e
    linhas de instruções. Por fim chama a função para exibir o resultado do cálculo das linhas.*/
-int processaArquivo(const char *nomeArq){
-    thrd_t tid; // thread identificafion.
-    Contador contagem;
-    Resultado dados;
-    dados.qntdArquivos = 1;
-    
-    strcpy(contagem.nomeArq, nomeArq);
+int processFile(const char *filename){
+    thrd_t tid;
+    LineCounter counter;
+    Result summary;
+    summary.fileCount = 1;
 
-    for(int i=0; i < dados.qntdArquivos; i++){
-        thrd_create(&tid, contaLinhas, &contagem);
-    }
-    for(int i=0; i < dados.qntdArquivos; i++){
-        thrd_join(tid, NULL);
-    }
+    strcpy(counter.filename, filename);
 
-    dados.totalComentarios = contagem.comentarios;
-    dados.totalInstrucoes = contagem.instrucoes;
-    dados.totalVazias = contagem.linhasVazias;
+    thrd_create(&tid, countLines, &counter);
+    thrd_join(tid, NULL);
 
-    saidaContagem(dados);
-            
+    summary.totalComments = counter.comments;
+    summary.totalInstructions = counter.instructions;
+    summary.totalEmpty = counter.emptyLines;
+
+    printLineCount(summary);
     return EXIT_SUCCESS;
-} // processaArquivo()
+} // processFile()
 
 /* Com base no argumento recebido pela linha de comando verifica se é um diretório ou um arquivo válido e chama a função necessária para 
    execução do argumento. Pega o tempo inicial e final e calcula a duração de execução.*/
-void processoFilho(char *argv){
-    Resultado dados = {0, 0, 0, 0}; // Inicializa os contadores.
-    TempoExecucao tempo = {"", "", 0.0};
+void childProcess(char *arg){
+    Result summary = {0, 0, 0, 0};
+    ExecutionTime timeInfo = {"", "", 0.0};
 
-    time_t inicio, fim;
+    time_t start, end;
     struct tm *info;
 
-    time(&inicio); // Armazena o tempo inicial.
-    info = localtime(&inicio);
-    strftime(tempo.inicio, sizeof(tempo.inicio), "%H:%M:%S", info); // Formata a hora no padrão, horas, minutos e segundos.
+    time(&start);
+    info = localtime(&start);
+    strftime(timeInfo.start, sizeof(timeInfo.start), "%H:%M:%S", info);
 
-    if(verificaDiretorio(argv) == 1){
-        int quantidade = contaArquivos(argv);
-        Contador *contagemArquivos = (Contador*)malloc(sizeof(Contador)*quantidade);
+    if (isDirectory(arg) == 1) {
+        int quantity = countFiles(arg);
+        LineCounter *counters = (LineCounter*)malloc(sizeof(LineCounter) * quantity);
 
-        processaDiretorio(argv, contagemArquivos, &dados); 
-        processaArquivos(contagemArquivos, dados);
-        free(contagemArquivos);
-    }
-    else{
-        if(verificaExtensao(argv) == 1)
-            processaArquivo(argv);
+        processDirectory(arg, counters, &summary);
+        processFiles(counters, summary);
+        free(counters);
+    } else {
+        if (checkExtension(arg) == 1)
+            processFile(arg);
         else {
-            printf(ERRO_EXTENSAO_INVALIDA);
+            printf(ERROR_INVALID_EXTENSION);
             exit(EXIT_FAILURE);
         }
     }
 
-    time(&fim); // Armazena o tempo final.
-    info = localtime(&fim);
-    strftime(tempo.termino, sizeof(tempo.termino), "%H:%M:%S", info); // Formata a hora no padrão, horas, minutos e segundos.
+    time(&end);
+    info = localtime(&end);
+    strftime(timeInfo.end, sizeof(timeInfo.end), "%H:%M:%S", info);
 
-    tempo.duracao = calculaDuracao(fim, inicio); // Calcula a duração de execução.
-
-    saidaTempo(tempo);
-} // processoFilho()
+    timeInfo.duration = calculateDuration(end, start);
+    printExecutionTime(timeInfo);
+} // childProcess()
 
 // Lê o argumento fornecido na linha de comando, se a entrada for válida cria o processo filho e aguarda.
 int clsc(int argc, char *argv[]){
-    setlocale(LC_ALL,PORTUGUES_BRASIL);
-    // Verifica se o usuário omitiu o segundo argumento, exibindo uma mensagem que demonstra como o comando deve ser executado.
+    setlocale(LC_ALL, LANGUAGE);
+
     if (argc != 2) {
-        printf(EXEMPLO_USO);
+        printf(USAGE_EXAMPLE);
         return 1;
     }
 
-    pid_t pid = criarProcesso();
-    if(pid > 0){
+    pid_t pid = createProcess();
+    if (pid > 0) {
         int status;
-        wait(&status); // Aguarda a conclusão do processo filho.
+        wait(&status);
     }
-    else 
-        if (pid == 0)
-            processoFilho(argv[1]);
-        else 
-            exit(EXIT_FAILURE);
+    else if (pid == 0) {
+        childProcess(argv[1]);
+    }
+    else {
+        exit(EXIT_FAILURE);
+    }
 } // clsc()
 
 int main(int argc, char *argv[]){
-    return clsc(argc,argv);
+    return clsc(argc, argv);
 }
