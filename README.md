@@ -1,4 +1,4 @@
-# 🧮 TSI-clsc (Count Line Source Code)
+# 🧮 TSI - CLSC (Count Line Source Code)
 
 Um contador de linhas de código-fonte em C desenvolvido como projeto da disciplina de **Sistema Operacionais (TSI)**.  
 O `clsc` percorre arquivos e diretórios, analisando arquivos com extensão `.c` para contar linhas de **código**, **comentários** e **linhas vazias**, utilizando **threads** para acelerar o processamento.
@@ -37,8 +37,8 @@ O `clsc` percorre arquivos e diretórios, analisando arquivos com extensão `.c`
 
 ## 📫 Autor
 
-Desenvolvido por Hugo Vinícius Rodrigues Pereira. *Contribuições são bem-vindas!*
-github.com/hugovrp
+Desenvolvido por Hugo Vinícius Rodrigues Pereira. **Contribuições são bem-vindas!**<br>
+github.com/hugovrp<br>
 linkedin.com/in/hugovrp
 
 
